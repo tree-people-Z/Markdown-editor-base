@@ -14,6 +14,7 @@ import type { EditorSettings } from './SettingsPanel'
 export interface EditorHandle {
   getContent: () => string
   setContent: (content: string) => void
+  setTitle: (title: string) => void
   clear: () => void
   getModified: () => boolean
   resetModified: () => void
@@ -98,7 +99,7 @@ function createTheme(p: ThemePalette) {
       ...(p.lineWrapping ? { overflowWrap: 'break-word', wordBreak: 'break-word' } : {}),
     },
     '.cm-content': {
-      padding: '48px 64px', caretColor: p.caret,
+      padding: '0 64px 48px', caretColor: p.caret,
       fontFamily: "-apple-system, 'Segoe UI', 'Inter', 'SF Pro Text', Roboto, Helvetica, Arial, sans-serif",
       ...(p.contentColor ? { color: p.contentColor } : {}),
     },
@@ -137,15 +138,6 @@ function createTheme(p: ThemePalette) {
       padding: '0 2px',
       borderRadius: '2px',
     },
-    '.cm-title-line': {
-      fontSize: `${fontSize + 6}px`,
-      fontWeight: '700',
-      textAlign: 'center',
-      paddingBottom: '16px',
-      marginBottom: '16px',
-      borderBottom: `1px solid ${p.hr}`,
-      lineHeight: '1.4',
-    },
   })
 }
 
@@ -155,11 +147,19 @@ function countWords(text: string): number {
   return trimmed.split(/\s+/).length
 }
 
+function buildTheme(palette: ThemePalette, s: EditorSettings) {
+  return createTheme({
+    ...palette,
+    fontSize: s.fontSize,
+    showLineNumbers: s.showLineNumbers,
+    lineWrapping: s.lineWrapping,
+  })
+}
+
 const lightPalette: ThemePalette = {
-  bg: '#ffffff', caret: '#007aff', selection: 'rgba(0, 122, 255, 0.2)',
-  gutterBg: '#ffffff', gutterBorder: '#e5e5e5', gutterText: '#86868f', activeGutter: '#f5f5f7',
-  hr: '#e5e5e5', tableBorder: '#e5e5e5', thBg: '#f5f5f7', codeBg: '#f5f5f7',
-  fontSize: 18, showLineNumbers: true, lineWrapping: true,
+  bg: '#f5f5f7', caret: '#007aff', selection: 'rgba(0, 122, 255, 0.2)',
+  gutterBg: '#f5f5f7', gutterBorder: '#e5e5e5', gutterText: '#86868f', activeGutter: '#eaeaea',
+  hr: '#e5e5e5', tableBorder: '#e5e5e5', thBg: '#eaeaea', codeBg: '#eaeaea',
 }
 
 const darkPalette: ThemePalette = {
@@ -167,7 +167,6 @@ const darkPalette: ThemePalette = {
   gutterBg: '#1c1c1e', gutterBorder: '#38383a', gutterText: '#98989d', activeGutter: '#2c2c2e',
   hr: '#38383a', tableBorder: '#38383a', thBg: '#2c2c2e', codeBg: '#2c2c2e',
   contentColor: '#f5f5f7', tableColor: '#f5f5f7',
-  fontSize: 18, showLineNumbers: true, lineWrapping: true,
 }
 
 const darkModeEffect = StateEffect.define<boolean>()
@@ -186,10 +185,10 @@ const strikeDeco = Decoration.mark({ class: 'cm-manual-strikethrough' })
 const codeDeco = Decoration.mark({ class: 'cm-manual-code' })
 
 const emphasisRegexps = [
-  { re: /\*\*(.+?)\*\*/g, markerLen: 2, deco: boldDeco },
-  { re: /(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, markerLen: 1, deco: italicDeco },
-  { re: /~~(.+?)~~/g, markerLen: 2, deco: strikeDeco },
-  { re: /`(.+?)`/g, markerLen: 1, deco: codeDeco },
+  { re: /\*\*([\s\S]+?)\*\*/g, markerLen: 2, deco: boldDeco },
+  { re: /(?<!\*)\*(?!\*)([\s\S]+?)(?<!\*)\*(?!\*)/g, markerLen: 1, deco: italicDeco },
+  { re: /~~([\s\S]+?)~~/g, markerLen: 2, deco: strikeDeco },
+  { re: /`([\s\S]+?)`/g, markerLen: 1, deco: codeDeco },
 ]
 
 function computeManualEmphasis(state: EditorState): DecorationSet {
@@ -217,24 +216,11 @@ function computeManualEmphasis(state: EditorState): DecorationSet {
   return builder.finish()
 }
 
-const firstLineDeco = Decoration.line({ class: 'cm-title-line' })
-
-function computeFirstLineTitle(state: EditorState): DecorationSet {
-  const builder = new RangeSetBuilder<Decoration>()
-  if (state.doc.lines > 0) {
-    const line = state.doc.line(1)
-    if (line.text.trim().length > 0) {
-      builder.add(line.from, line.from, firstLineDeco)
-    }
-  }
-  return builder.finish()
-}
-
 function computeHighlightDecorations(state: EditorState): DecorationSet {
+  const builder = new RangeSetBuilder<Decoration>()
   const docStr = state.doc.toString()
-  if (!docStr.includes('==')) return Decoration.none
-  const ranges: { from: number; to: number; value: Decoration }[] = []
-  const regex = /==(.+?)==/g
+  if (!docStr.includes('==')) return builder.finish()
+  const regex = /==([\s\S]+?)==/g
   regex.lastIndex = 0
   let match: RegExpExecArray | null
   while ((match = regex.exec(docStr)) !== null) {
@@ -243,12 +229,11 @@ function computeHighlightDecorations(state: EditorState): DecorationSet {
     const innerEnd = start + match[0].length - 2
     const end = start + match[0].length
     if (innerEnd <= innerStart) continue
-    ranges.push({ from: start, to: innerStart, value: Decoration.mark({ class: 'cm-formatting-hide' }) })
-    ranges.push({ from: innerStart, to: innerEnd, value: Decoration.mark({ class: 'cm-manual-highlight' }) })
-    ranges.push({ from: innerEnd, to: end, value: Decoration.mark({ class: 'cm-formatting-hide' }) })
+    builder.add(start, innerStart, hideDeco)
+    builder.add(innerStart, innerEnd, Decoration.mark({ class: 'cm-manual-highlight' }))
+    builder.add(innerEnd, end, hideDeco)
   }
-  ranges.sort((a, b) => a.from - b.from || a.to - b.to)
-  return Decoration.set(ranges.map(r => r.value.range(r.from, r.to)), false)
+  return builder.finish()
 }
 
 function computeMermaidDecorations(state: EditorState): DecorationSet {
@@ -321,24 +306,20 @@ function computeMathDecorations(state: EditorState): DecorationSet {
 }
 
 function combineDecorations(state: EditorState): DecorationSet {
-  const all: { from: number; to: number; value: Decoration }[] = []
-
-  const add = (set: DecorationSet) => {
-    try {
-      set.between(0, state.doc.length, (from, to, value) => {
-        all.push({ from, to, value })
-      })
-    } catch (e) { console.error('deco error:', e) }
+  const all: { from: number; to: number; deco: Decoration }[] = []
+  const collect = (set: DecorationSet) => {
+    set.between(0, state.doc.length, (from, to, value) => {
+      all.push({ from, to, deco: value })
+    })
   }
-
-  add(computeMermaidDecorations(state))
-  add(computeMathDecorations(state))
-  add(computeManualEmphasis(state))
-  add(computeHighlightDecorations(state))
-  add(computeFirstLineTitle(state))
-
+  collect(computeMermaidDecorations(state))
+  collect(computeMathDecorations(state))
+  collect(computeManualEmphasis(state))
+  collect(computeHighlightDecorations(state))
   all.sort((a, b) => a.from - b.from || a.to - b.to)
-  return Decoration.set(all.map(r => r.value.range(r.from, r.to)))
+  const builder = new RangeSetBuilder<Decoration>()
+  for (const r of all) builder.add(r.from, r.to, r.deco)
+  return builder.finish()
 }
 
 const wysiwygField = StateField.define<DecorationSet>({
@@ -347,6 +328,21 @@ const wysiwygField = StateField.define<DecorationSet>({
   provide: f => EditorView.decorations.from(f),
 })
 
+function wrapContent(text: string, maxChars: number): string {
+  text = text.replace(/\r/g, '')
+  const lines = text.split('\n')
+  const out: string[] = []
+  for (const line of lines) {
+    if (line.length <= maxChars) {
+      out.push(line)
+    } else {
+      for (let i = 0; i < line.length; i += maxChars)
+        out.push(line.slice(i, i + maxChars))
+    }
+  }
+  return out.join('\n')
+}
+
 const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   { darkMode, settings, linkedFolderPath, onContentChange, onModifiedChange, onFilePathChange, onCursorChange, onWordCountChange },
   ref,
@@ -354,26 +350,34 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   const editorRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const modifiedRef = useRef(false)
   const suppressModifiedRef = useRef(false)
   const filePathRef = useRef<string | null>(null)
   const themeCompartmentRef = useRef(new Compartment())
   const highlightCompartmentRef = useRef(new Compartment())
   const settingsCompartmentRef = useRef(new Compartment())
+
   const wordCountTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hardWrapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const maxChars = Math.max(30, Math.floor(((settings?.editorWidth || 800) - 128) / ((settings?.fontSize || 18) * 0.6)))
+  const maxCharsRef = useRef(maxChars)
+  maxCharsRef.current = maxChars
   const onContentChangeRef = useRef(onContentChange)
   const onModifiedChangeRef = useRef(onModifiedChange)
   const onFilePathChangeRef = useRef(onFilePathChange)
   const onCursorChangeRef = useRef(onCursorChange)
   const onWordCountChangeRef = useRef(onWordCountChange)
   const [inlineToolbar, setInlineToolbar] = useState<{ top: number; left: number } | null>(null)
-  const [showTitleHint, setShowTitleHint] = useState(true)
+  const [title, setTitle] = useState('')
+  const titleRef = useRef('')
 
   onContentChangeRef.current = onContentChange
   onModifiedChangeRef.current = onModifiedChange
   onFilePathChangeRef.current = onFilePathChange
   onCursorChangeRef.current = onCursorChange
   onWordCountChangeRef.current = onWordCountChange
+  titleRef.current = title
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -457,18 +461,8 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     }
 
     const palette = darkMode ? darkPalette : lightPalette
-    const s = settings || { fontSize: 18, showLineNumbers: true, lineWrapping: true, editorWidth: 800, autoSave: true, autoSaveInterval: 30 }
-    const settingsTheme = createTheme({
-      bg: palette.bg, caret: palette.caret, selection: palette.selection,
-      gutterBg: palette.gutterBg, gutterBorder: palette.gutterBorder,
-      gutterText: palette.gutterText, activeGutter: palette.activeGutter,
-      hr: palette.hr, tableBorder: palette.tableBorder, thBg: palette.thBg,
-      codeBg: palette.codeBg, contentColor: palette.contentColor,
-      tableColor: palette.tableColor,
-      fontSize: s.fontSize,
-      showLineNumbers: s.showLineNumbers,
-      lineWrapping: s.lineWrapping,
-    })
+    const s = settings || { fontSize: 18, showLineNumbers: true, lineWrapping: false, editorWidth: 800, autoSave: true, autoSaveInterval: 30 }
+    const settingsTheme = buildTheme(palette, s)
 
     const view = new EditorView({
       state: EditorState.create({
@@ -500,7 +494,27 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
               wordCountTimerRef.current = setTimeout(() => {
                 onWordCountChangeRef.current?.(countWords(text))
               }, 300)
-              setShowTitleHint(update.state.doc.line(1).text.trim().length === 0)
+
+              if (hardWrapTimerRef.current) clearTimeout(hardWrapTimerRef.current)
+              hardWrapTimerRef.current = setTimeout(() => {
+                hardWrapTimerRef.current = null
+                const v = viewRef.current
+                if (!v) return
+                const mc = Math.max(30, Math.floor(((settings?.editorWidth || 800) - 128) / ((settings?.fontSize || 18) * 0.6)))
+                const doc = v.state.doc
+                const changes: { from: number; to: number; insert: string }[] = []
+                for (let i = 1; i <= doc.lines; i++) {
+                  const line = doc.line(i)
+                  if (line.length > mc) {
+                    for (let pos = mc; pos < line.length; pos += mc)
+                      changes.push({ from: line.from + pos, to: line.from + pos, insert: '\n' })
+                  }
+                }
+                if (changes.length > 0) {
+                  suppressModifiedRef.current = true
+                  v.dispatch({ changes })
+                }
+              }, 0)
             }
 
             const sel = update.state.selection.main
@@ -580,9 +594,10 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   const commitSave = async () => {
     const view = viewRef.current
     if (!view) return
+    const t = titleRef.current
     const content = view.state.doc.toString()
-    const firstLine = content.split('\n')[0]?.replace(/^#+\s*/, '').trim().replace(/[<>:"/\\|?*]/g, '') || ''
-    const defaultName = firstLine ? `${firstLine.substring(0, 60)}.md` : undefined
+    const cleanTitle = t.replace(/[<>:"/\\|?*]/g, '').trim() || ''
+    const defaultName = cleanTitle ? `${cleanTitle.substring(0, 60)}.md` : undefined
 
     let fp = filePathRef.current
     if (!fp && linkedFolderPath && defaultName) {
@@ -705,6 +720,13 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     view.focus()
   }, [])
 
+const BLOCK_INSERT: Record<string, string> = {
+  h1: '# ', h2: '## ', h3: '### ', h4: '#### ', h5: '##### ', h6: '###### ',
+  quote: '> ', codeblock: '```\n\n```', mermaid: '```mermaid\n\n```',
+  math: '$$\n\n$$', ul: '- ', ol: '1. ', task: '- [ ] ',
+  hr: '\n---\n', table: '\n| 列1 | 列2 | 列3 |\n| --- | --- | --- |\n| 内容 | 内容 | 内容 |\n',
+}
+
   const insertBlock = useCallback((type: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6' | 'quote' | 'codeblock' | 'ul' | 'ol' | 'task' | 'hr' | 'table' | 'mermaid' | 'math') => {
     const view = viewRef.current
     if (!view) return
@@ -713,25 +735,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     const line = view.state.doc.lineAt(pos)
     const lineStart = line.from
 
-    let insertion = ''
-
-    switch (type) {
-      case 'h1': insertion = `# `; break
-      case 'h2': insertion = `## `; break
-      case 'h3': insertion = `### `; break
-      case 'h4': insertion = `#### `; break
-      case 'h5': insertion = `##### `; break
-      case 'h6': insertion = `###### `; break
-      case 'quote': insertion = `> `; break
-      case 'codeblock': insertion = '```\n\n```'; break
-      case 'mermaid': insertion = '```mermaid\n\n```'; break
-      case 'math': insertion = '$$\n\n$$'; break
-      case 'ul': insertion = `- `; break
-      case 'ol': insertion = `1. `; break
-      case 'task': insertion = `- [ ] `; break
-      case 'hr': insertion = `\n---\n`; break
-      case 'table': insertion = '\n| 列1 | 列2 | 列3 |\n| --- | --- | --- |\n| 内容 | 内容 | 内容 |\n'; break
-    }
+    const insertion = BLOCK_INSERT[type] || ''
 
     if (type === 'hr' || type === 'table') {
       view.dispatch({
@@ -746,20 +750,16 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     } else {
       const existing = view.state.sliceDoc(lineStart, line.from + line.length)
       const markerRegex = /^(#{1,6}\s|>\s|- \[ \] |- |\d+\.\s)/
-      const startsWithMarker = markerRegex.test(existing)
-      if (startsWithMarker) {
+      if (markerRegex.test(existing)) {
         const currentMarker = existing.match(markerRegex)?.[0] ?? ''
-        const lineContent = view.state.sliceDoc(lineStart, line.from + line.length)
         if (currentMarker === insertion) {
-          const cleanContent = lineContent.replace(markerRegex, '')
           view.dispatch({
-            changes: { from: lineStart, to: line.from + line.length, insert: cleanContent },
+            changes: { from: lineStart, to: line.from + line.length, insert: existing.replace(markerRegex, '') },
             selection: { anchor: lineStart },
           })
         } else {
-          const newLine = insertion + lineContent.replace(markerRegex, '')
           view.dispatch({
-            changes: { from: lineStart, to: line.from + line.length, insert: newLine },
+            changes: { from: lineStart, to: line.from + line.length, insert: insertion + existing.replace(markerRegex, '') },
             selection: { anchor: lineStart + insertion.length },
           })
         }
@@ -780,14 +780,20 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       if (!view) return
       suppressModifiedRef.current = true
       view.dispatch({
-        changes: { from: 0, to: view.state.doc.length, insert: content },
+        changes: { from: 0, to: view.state.doc.length, insert: wrapContent(content, maxCharsRef.current) },
       })
       modifiedRef.current = false
       onModifiedChangeRef.current?.(false)
     },
+    setTitle: (t: string) => {
+      setTitle(t)
+      titleRef.current = t
+    },
     clear: () => {
       const view = viewRef.current
       if (!view) return
+      setTitle('')
+      titleRef.current = ''
       suppressModifiedRef.current = true
       view.dispatch({
         changes: { from: 0, to: view.state.doc.length, insert: '' },
@@ -823,9 +829,11 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       if (action === 'cancel') return
       const view = viewRef.current
       if (!view) return
+      setTitle('')
+      titleRef.current = ''
       suppressModifiedRef.current = true
       view.dispatch({
-        changes: { from: 0, to: view.state.doc.length, insert: '\n\n\n\n\n\n\n\n\n\n' },
+        changes: { from: 0, to: view.state.doc.length, insert: wrapContent('\n'.repeat(20), maxCharsRef.current) },
       })
       modifiedRef.current = false
       onModifiedChangeRef.current?.(false)
@@ -839,9 +847,12 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       if (!result) return
       const view = viewRef.current
       if (!view) return
+      const fileName = result.filePath.replace(/.*[/\\]/, '').replace(/\.\w+$/, '')
+      setTitle(fileName)
+      titleRef.current = fileName
       suppressModifiedRef.current = true
       view.dispatch({
-        changes: { from: 0, to: view.state.doc.length, insert: result.content },
+        changes: { from: 0, to: view.state.doc.length, insert: wrapContent(result.content, maxCharsRef.current) },
       })
       modifiedRef.current = false
       onModifiedChangeRef.current?.(false)
@@ -852,9 +863,10 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     saveAs: async () => {
       const view = viewRef.current
       if (!view) return
+      const t = titleRef.current
       const content = view.state.doc.toString()
-      const firstLine = content.split('\n')[0]?.replace(/^#+\s*/, '').trim().replace(/[<>:"/\\|?*]/g, '') || ''
-      const defaultName = firstLine ? `${firstLine.substring(0, 60)}.md` : undefined
+      const cleanTitle = t.replace(/[<>:"/\\|?*]/g, '').trim() || ''
+      const defaultName = cleanTitle ? `${cleanTitle.substring(0, 60)}.md` : undefined
       const fp = (await window.electronAPI?.saveFileDialog(defaultName)) ?? null
       if (!fp) return
       await window.electronAPI?.writeFile(fp, content)
@@ -887,19 +899,9 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   useEffect(() => {
     const view = viewRef.current
     if (!view) return
-    const s = settings || { fontSize: 18, showLineNumbers: true, lineWrapping: true, editorWidth: 800, autoSave: true, autoSaveInterval: 30 }
+    const s = settings || { fontSize: 18, showLineNumbers: true, lineWrapping: false, editorWidth: 800, autoSave: true, autoSaveInterval: 30 }
     const palette = darkMode ? darkPalette : lightPalette
-    const settingsTheme = createTheme({
-      bg: palette.bg, caret: palette.caret, selection: palette.selection,
-      gutterBg: palette.gutterBg, gutterBorder: palette.gutterBorder,
-      gutterText: palette.gutterText, activeGutter: palette.activeGutter,
-      hr: palette.hr, tableBorder: palette.tableBorder, thBg: palette.thBg,
-      codeBg: palette.codeBg, contentColor: palette.contentColor,
-      tableColor: palette.tableColor,
-      fontSize: s.fontSize,
-      showLineNumbers: s.showLineNumbers,
-      lineWrapping: s.lineWrapping,
-    })
+    const settingsTheme = buildTheme(palette, s)
     view.dispatch({
       effects: [
         darkModeEffect.of(!!darkMode),
@@ -912,11 +914,43 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         })),
       ],
     })
+
   }, [darkMode, settings])
+
+  const fontSize = settings?.fontSize || 18
+  const editorWidth = settings?.editorWidth || 800
 
   return (
     <div ref={containerRef} className="h-full w-full relative">
-      <div ref={editorRef} className="h-full w-full" />
+      <div ref={scrollContainerRef} className="absolute inset-0 overflow-y-auto editor-scroll-container">
+        <input
+          type="text"
+          className="cm-title-input"
+          placeholder="标题"
+          value={title}
+          onChange={e => {
+            setTitle(e.target.value)
+            titleRef.current = e.target.value
+          }}
+          onKeyDown={e => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              viewRef.current?.focus()
+            }
+          }}
+          style={{
+            display: 'block',
+            width: '100%',
+            maxWidth: `${editorWidth}px`,
+            margin: '0 auto',
+            padding: '24px 64px 16px',
+            fontSize: `${fontSize + 6}px`,
+            fontWeight: 700,
+            textAlign: 'center',
+          }}
+        />
+        <div ref={editorRef} />
+      </div>
       {inlineToolbar && (
         <InlineToolbar
           top={inlineToolbar.top}
@@ -935,13 +969,6 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
           onMath={() => insertBlock('math')}
           onClose={() => setInlineToolbar(null)}
         />
-      )}
-      {showTitleHint && (
-        <div className="absolute top-0 left-0 right-0 pointer-events-none select-none z-10" style={{ padding: '48px 64px 0' }}>
-          <span className="text-2xl font-bold tracking-wide block text-center text-black/10 dark:text-white/10">
-            标题
-          </span>
-        </div>
       )}
     </div>
   )

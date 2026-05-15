@@ -8,6 +8,7 @@ import {
   Highlighter,
 } from 'lucide-react'
 import type { InlineFormatType, BlockFormatType } from '../types'
+import { HEADING_ENTRIES } from '../types'
 
 interface ToolbarProps {
   darkMode: boolean
@@ -22,8 +23,6 @@ interface ToolbarProps {
   onUndo?: () => void
   onRedo?: () => void
 }
-
-type HeadingLevel = 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
 
 function Toolbar({
   darkMode,
@@ -55,15 +54,6 @@ function Toolbar({
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
-
-  const headingLabels: { level: HeadingLevel; label: string; shortcut: string }[] = [
-    { level: 'h1', label: 'Heading 1', shortcut: '#' },
-    { level: 'h2', label: 'Heading 2', shortcut: '##' },
-    { level: 'h3', label: 'Heading 3', shortcut: '###' },
-    { level: 'h4', label: 'Heading 4', shortcut: '####' },
-    { level: 'h5', label: 'Heading 5', shortcut: '#####' },
-    { level: 'h6', label: 'Heading 6', shortcut: '######' },
-  ]
 
   const btn = 'w-7 h-7 flex items-center justify-center text-[#86868f] dark:text-[#98989d] hover:bg-[#e5e5e5] dark:hover:bg-[#2c2c2e] rounded-md transition-colors text-xs'
   const separator = 'w-px h-5 bg-[#e5e5e5] dark:bg-[#38383a] mx-1'
@@ -103,7 +93,7 @@ function Toolbar({
         <button className={btn} title="标题" onClick={() => setShowHeading(v => !v)}><Type size={15} /></button>
         {showHeading && (
           <div className="absolute top-full left-0 mt-0.5 bg-white dark:bg-[#2c2c2e] rounded-lg shadow-xl border border-[#e5e5e5] dark:border-[#38383a] py-1 min-w-[160px] z-50">
-            {headingLabels.map(h => (
+            {HEADING_ENTRIES.map(h => (
               <button
                 key={h.level}
                 className="w-full px-3 py-1.5 text-xs text-left text-[#1d1d1f] dark:text-[#f5f5f7] hover:bg-[#e5e5e5] dark:hover:bg-[#3a3a3c] flex items-center gap-2 transition-colors"

@@ -16,7 +16,7 @@ const DEFAULT_SETTINGS: EditorSettings = {
   autoSave: true,
   autoSaveInterval: 30,
   showLineNumbers: true,
-  lineWrapping: true,
+  lineWrapping: false,
 }
 
 const SETTINGS_KEY = 'markdown-editor-settings'

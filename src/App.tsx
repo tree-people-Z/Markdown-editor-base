@@ -202,17 +202,13 @@ function App() {
     editor.formatInline(type, url)
   }, [])
 
+  const closeImageInput = useCallback(() => { setShowImageInput(false); setImageUrlInput('') }, [])
+
   const handleBlock = useCallback((type: BlockFormatType) => {
     const editor = editorRef.current
     if (!editor) return
-    if (type === 'mermaid') {
-      setShowMermaidDialog(true)
-      return
-    }
-    if (type === 'math') {
-      setShowFormulaDialog(true)
-      return
-    }
+    if (type === 'mermaid') { setShowMermaidDialog(true); return }
+    if (type === 'math') { setShowFormulaDialog(true); return }
     editor.insertBlock(type)
   }, [])
 
@@ -254,6 +250,8 @@ function App() {
     if (content != null) {
       setShowWelcome(false)
       setHasContent(true)
+      const fileName = filePath.replace(/.*[/\\]/, '').replace(/\.\w+$/, '')
+      editor.setTitle(fileName)
       editor.setContent(content)
       editor.resetModified()
       editor.focus()
@@ -393,7 +391,7 @@ function App() {
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">插入图片 URL</span>
               <button
-                onClick={() => { setShowImageInput(false); setImageUrlInput('') }}
+                onClick={closeImageInput}
                 className="w-6 h-6 flex items-center justify-center text-[#86868f] hover:bg-[#e5e5e5] dark:hover:bg-[#3a3a3c] rounded transition-colors"
               >
                 <X size={14} />
@@ -404,13 +402,13 @@ function App() {
               type="text"
               value={imageUrlInput}
               onChange={e => setImageUrlInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleImageSubmit(); if (e.key === 'Escape') { setShowImageInput(false); setImageUrlInput('') } }}
+              onKeyDown={e => { if (e.key === 'Enter') handleImageSubmit(); if (e.key === 'Escape') closeImageInput() }}
               placeholder="https://..."
               className="w-full h-9 px-3 text-sm bg-[#f5f5f7] dark:bg-[#1c1c1e] border border-[#e5e5e5] dark:border-[#38383a] rounded-lg outline-none text-[#1d1d1f] dark:text-[#f5f5f7] placeholder-[#aeaeb2] focus:border-[#007aff] dark:focus:border-[#0a84ff] transition-colors"
             />
             <div className="flex justify-end gap-2 mt-3">
               <button
-                onClick={() => { setShowImageInput(false); setImageUrlInput('') }}
+                onClick={closeImageInput}
                 className="px-3 py-1.5 text-xs rounded-lg bg-[#e5e5e5] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7] hover:opacity-80 transition-opacity"
               >
                 取消

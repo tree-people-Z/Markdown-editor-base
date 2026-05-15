@@ -6,6 +6,8 @@ import {
 } from 'lucide-react'
 import type { FolderEntry } from '../types'
 
+const LINKED_FOLDER_KEY = 'markdown-editor-linked-folder'
+
 interface SidebarProps {
   onNew: () => void
   onOpenFile?: (filePath: string) => void
@@ -259,7 +261,7 @@ function Sidebar({
               </button>
               <button
                 onClick={() => {
-                  localStorage.removeItem('markdown-editor-linked-folder')
+                  localStorage.removeItem(LINKED_FOLDER_KEY)
                   window.location.reload()
                 }}
                 className="w-7 h-7 flex items-center justify-center text-[#86868f] dark:text-[#98989d] hover:bg-[#e5e5e5] dark:hover:bg-[#2c2c2e] rounded-md transition-colors"

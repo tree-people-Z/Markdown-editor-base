@@ -73,8 +73,8 @@ function WelcomePage({ onNew, onOpenFile, onLinkFolder, linkedFolderPath }: Welc
               {allMdFiles.map(entry => {
                 const preview = entry.preview || ''
                 const lines = preview.split('\n')
-                const title = lines[0]?.replace(/^#+\s*/, '').trim() || entry.name.replace(/\.(md|markdown)$/i, '')
-                const bodyLines = lines.slice(1).filter(l => !l.startsWith('#') && !l.startsWith('>') && !l.startsWith('-') && !l.match(/^\d+\.\s/)).join(' ').trim().slice(0, 120)
+                const title = entry.name.replace(/\.(md|markdown)$/i, '')
+                const bodyLines = lines.filter(l => !l.startsWith('#') && !l.startsWith('>') && !l.startsWith('-') && !l.match(/^\d+\.\s/)).join(' ').trim().slice(0, 120)
                 return (
                   <button
                     key={entry.path}

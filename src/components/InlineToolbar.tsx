@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { Bold, Italic, Strikethrough, Highlighter, Code, Link2, Check, Quote, List, CheckSquare, Type, PieChart, Sigma } from 'lucide-react'
+import { HEADING_ENTRIES } from '../types'
 
 interface InlineToolbarProps {
   top: number
@@ -48,15 +49,6 @@ function InlineToolbar({ top, left, onBold, onItalic, onStrikethrough, onHighlig
     setShowLinkInput(false)
   }
 
-  const headingLabels = [
-    { level: 'h1' as const, label: 'Heading 1', shortcut: '#' },
-    { level: 'h2' as const, label: 'Heading 2', shortcut: '##' },
-    { level: 'h3' as const, label: 'Heading 3', shortcut: '###' },
-    { level: 'h4' as const, label: 'Heading 4', shortcut: '####' },
-    { level: 'h5' as const, label: 'Heading 5', shortcut: '#####' },
-    { level: 'h6' as const, label: 'Heading 6', shortcut: '######' },
-  ]
-
   return (
     <div
       className="fixed z-[100] flex items-center gap-0.5 bg-white dark:bg-[#2c2c2e] rounded-lg shadow-xl dark:shadow-[#00000033] border border-[#e5e5e5] dark:border-[#38383a] px-1 py-1"
@@ -74,7 +66,7 @@ function InlineToolbar({ top, left, onBold, onItalic, onStrikethrough, onHighlig
         </button>
         {showHeading && (
           <div className="absolute top-full left-0 mt-1 bg-white dark:bg-[#2c2c2e] rounded-lg shadow-xl border border-[#e5e5e5] dark:border-[#38383a] py-1 min-w-[150px]">
-            {headingLabels.map(h => (
+            {HEADING_ENTRIES.map(h => (
               <button
                 key={h.level}
                 className="w-full px-3 py-1.5 text-xs text-left text-[#1d1d1f] dark:text-[#f5f5f7] hover:bg-[#e5e5e5] dark:hover:bg-[#3a3a3c] flex items-center gap-2 transition-colors"
