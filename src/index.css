@@ -1,0 +1,217 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, 'Segoe UI', 'Inter', 'SF Pro Text', Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.titlebar {
+  height: 36px;
+  width: 100%;
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+::selection {
+  background: rgba(0, 122, 255, 0.2);
+}
+
+.cm-editor {
+  height: 100%;
+}
+
+.cm-editor .cm-scroller {
+  overflow: auto;
+}
+
+.cm-editor.cm-focused {
+  outline: none;
+}
+
+.cm-h1 { font-size: 34px; font-weight: 700; line-height: 1.3; margin: 0.6em 0 0.3em; }
+.cm-h2 { font-size: 28px; font-weight: 700; line-height: 1.3; margin: 0.5em 0 0.3em; }
+.cm-h3 { font-size: 24px; font-weight: 600; line-height: 1.3; margin: 0.4em 0 0.2em; }
+.cm-h4 { font-size: 20px; font-weight: 600; line-height: 1.3; margin: 0.3em 0 0.2em; }
+.cm-h5 { font-size: 18px; font-weight: 600; line-height: 1.3; margin: 0.3em 0 0.2em; }
+.cm-h6 { font-size: 16px; font-weight: 600; line-height: 1.3; color: #86868f; margin: 0.3em 0 0.2em; }
+.cm-h { margin: 0.5em 0; }
+
+.dark .cm-h6 { color: #98989d; }
+
+.cm-blockcode {
+  margin: 12px 0;
+}
+
+.cm-hr {
+  display: block;
+  height: 1px;
+  margin: 16px 0;
+  background: transparent;
+  border: none;
+}
+
+.cm-hr .cm-hr-inner {
+  display: block;
+  border-top: 1px solid #e5e5e5;
+  text-align: center;
+}
+
+.dark .cm-hr .cm-hr-inner {
+  border-top-color: #38383a;
+}
+
+.cm-inline-code {
+  font-family: 'JetBrains Mono', 'Cascadia Code', 'SF Mono', 'Fira Code', Consolas, monospace;
+  background: #f5f5f7;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.dark .cm-inline-code {
+  background: #2c2c2e;
+  color: #f5f5f7;
+}
+
+.cm-mermaid-widget {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 24px;
+  margin: 8px 0;
+  background: #fafafa;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  min-height: 80px;
+  cursor: pointer;
+  position: relative;
+}
+
+.cm-mermaid-widget svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.mermaid-loading {
+  color: #86868f;
+  font-family: 'SF Pro Display', 'Inter', sans-serif;
+  font-size: 13px;
+}
+
+.mermaid-error {
+  color: #e81123;
+  font-family: 'SF Pro Display', 'Inter', sans-serif;
+  font-size: 13px;
+}
+
+.mermaid-edit-hint {
+  position: absolute;
+  bottom: 4px;
+  right: 8px;
+  font-size: 10px;
+  color: #aeaeb2;
+  font-family: 'SF Pro Display', 'Inter', sans-serif;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.cm-mermaid-widget:hover .mermaid-edit-hint {
+  opacity: 1;
+}
+
+.dark .cm-mermaid-widget {
+  background: #2c2c2e;
+  border-color: #38383a;
+}
+
+.dark .mermaid-loading {
+  color: #98989d;
+}
+
+.dark .mermaid-error {
+  color: #ff453a;
+}
+
+.cm-math-widget {
+  font-family: 'KaTeX_Main', 'Times New Roman', serif;
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 0 2px;
+  transition: background 0.1s;
+}
+
+.cm-math-widget:hover {
+  background: rgba(0, 122, 255, 0.08);
+}
+
+.dark .cm-math-widget:hover {
+  background: rgba(10, 132, 255, 0.15);
+}
+
+.cm-formatting-hide {
+  display: none;
+}
+.cm-manual-strong {
+  font-weight: 700;
+}
+.cm-manual-em {
+  font-style: italic;
+}
+.cm-manual-strikethrough {
+  text-decoration: line-through;
+}
+.cm-manual-code {
+  font-family: 'JetBrains Mono', 'Cascadia Code', 'SF Mono', 'Fira Code', Consolas, monospace;
+  background: #f5f5f7;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+.dark .cm-manual-code {
+  background: #2c2c2e;
+  color: #f5f5f7;
+}
