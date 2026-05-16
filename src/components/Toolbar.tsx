@@ -4,7 +4,7 @@ import {
   Bold, Italic, Strikethrough, Code, Link2,
   Type, Quote, List, ListOrdered, CheckSquare,
   Table, Image, Minus, FileCode, Undo2, Redo2,
-  PieChart, Sigma, MoreHorizontal, Settings, Home,
+  Sigma, MoreHorizontal, Settings, Home,
   Highlighter, FileDown,
 } from 'lucide-react'
 import type { InlineFormatType, BlockFormatType } from '../types'
@@ -79,7 +79,7 @@ function Toolbar({
 
       {/* Sidebar toggle */}
       {onToggleSidebar && (
-        <button onClick={onToggleSidebar} className={btn} title="浏览文件">
+        <button onClick={onToggleSidebar} className={btn} title="浏览文件" data-sidebar-toggle="true">
           <FolderOpen size={15} />
         </button>
       )}
@@ -157,13 +157,6 @@ function Toolbar({
             >
               <Minus size={14} />
               <span>分隔线</span>
-            </button>
-            <button
-              onClick={() => { onBlock?.('mermaid'); setShowMoreMenu(false) }}
-              className="w-full px-3 py-1.5 text-xs text-left text-[#1d1d1f] dark:text-[#f5f5f7] hover:bg-[#e5e5e5] dark:hover:bg-[#3a3a3c] flex items-center gap-2 transition-colors"
-            >
-              <PieChart size={14} />
-              <span>Mermaid 图表</span>
             </button>
             <button
               onClick={() => { onBlock?.('math'); setShowMoreMenu(false) }}

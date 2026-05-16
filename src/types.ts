@@ -12,7 +12,7 @@ export type HeadingLevel = 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
 export type BlockFormatType =
   | HeadingLevel
   | 'quote' | 'codeblock' | 'ul' | 'ol' | 'task' | 'hr' | 'table'
-  | 'mermaid' | 'math'
+  | 'math'
 
 export const HEADING_ENTRIES: { level: HeadingLevel; label: string; shortcut: string }[] = [
   { level: 'h1', label: 'Heading 1', shortcut: '#' },

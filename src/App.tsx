@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Feather, X } from 'lucide-react'
 import Editor, { type EditorHandle } from './components/Editor'
 import WindowControls from './components/WindowControls'
@@ -7,10 +7,8 @@ import Toolbar from './components/Toolbar'
 import StatusBar from './components/StatusBar'
 import Sidebar from './components/Sidebar'
 import SettingsPanel, { loadSettings, type EditorSettings } from './components/SettingsPanel'
+import FormulaDialog from './components/FormulaDialog'
 import type { FolderEntry, InlineFormatType, BlockFormatType } from './types'
-
-const MermaidDialog = lazy(() => import('./components/MermaidDialog'))
-const FormulaDialog = lazy(() => import('./components/FormulaDialog'))
 
 const LINKED_FOLDER_KEY = 'markdown-editor-linked-folder'
 
@@ -30,23 +28,38 @@ function App() {
   const [linkedFolderPath, setLinkedFolderPath] = useState<string | null>(() => localStorage.getItem(LINKED_FOLDER_KEY))
   const [imageUrlInput, setImageUrlInput] = useState('')
   const [showImageInput, setShowImageInput] = useState(false)
-  const [showMermaidDialog, setShowMermaidDialog] = useState(false)
   const [showFormulaDialog, setShowFormulaDialog] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [settings, setSettings] = useState<EditorSettings>(loadSettings)
+  const [welcomeKey, setWelcomeKey] = useState(0)
+  const [sidebarPinned, setSidebarPinned] = useState(false)
   const sidebarTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Hide sidebar when mouse leaves the window
+  // Hide sidebar when mouse leaves the window (unless pinned)
   useEffect(() => {
     const handle = (e: MouseEvent) => {
-      if (!e.relatedTarget) {
+      if (!e.relatedTarget && !sidebarPinned) {
         if (sidebarTimerRef.current) clearTimeout(sidebarTimerRef.current)
         setSidebarVisible(false)
       }
     }
     document.addEventListener('mouseout', handle)
     return () => document.removeEventListener('mouseout', handle)
-  }, [])
+  }, [sidebarPinned])
+
+  // Click outside sidebar = unpin and close
+  useEffect(() => {
+    const handle = (e: MouseEvent) => {
+      const sidebar = document.querySelector('.sidebar-panel')
+      const toggleBtn = (e.target as HTMLElement)?.closest?.('[data-sidebar-toggle]')
+      if (sidebarPinned && sidebar && !sidebar.contains(e.target as Node) && !toggleBtn) {
+        setSidebarPinned(false)
+        setSidebarVisible(false)
+      }
+    }
+    document.addEventListener('mousedown', handle)
+    return () => document.removeEventListener('mousedown', handle)
+  }, [sidebarPinned])
 
   useEffect(() => {
     const cleanup = window.electronAPI?.onToggleDarkMode(() => {
@@ -227,20 +240,8 @@ function App() {
   const handleBlock = useCallback((type: BlockFormatType) => {
     const editor = editorRef.current
     if (!editor) return
-    if (type === 'mermaid') { setShowMermaidDialog(true); return }
     if (type === 'math') { setShowFormulaDialog(true); return }
     editor.insertBlock(type)
-  }, [])
-
-  const handleMermaidInsert = useCallback((code: string) => {
-    const editor = editorRef.current
-    if (!editor) return
-    try {
-      editor.insertText('```mermaid\n' + code + '\n```')
-    } catch (e) {
-      console.error('insert mermaid failed:', e)
-    }
-    setShowMermaidDialog(false)
   }, [])
 
   const handleFormulaInsert = useCallback((expression: string, displayMode: boolean) => {
@@ -284,15 +285,17 @@ function App() {
   }, [])
 
   const handleSidebarMouseLeave = useCallback(() => {
+    if (sidebarPinned) return
     sidebarTimerRef.current = setTimeout(() => {
       setSidebarVisible(false)
     }, 1000)
-  }, [])
+  }, [sidebarPinned])
 
   const handleToggleSidebar = useCallback(async () => {
     if (sidebarTimerRef.current) clearTimeout(sidebarTimerRef.current)
     if (sidebarVisible) {
       setSidebarVisible(false)
+      setSidebarPinned(false)
       return
     }
     if (linkedFolderPath) {
@@ -303,6 +306,7 @@ function App() {
       }
     }
     setSidebarVisible(true)
+    setSidebarPinned(true)
   }, [sidebarVisible, linkedFolderPath])
 
   const handleRefreshFolder = useCallback(async () => {
@@ -323,6 +327,7 @@ function App() {
     setFolderPath(null)
     setFolderEntries([])
     setSidebarVisible(false)
+    setWelcomeKey(k => k + 1)
     editorRef.current?.setContent('')
     editorRef.current?.resetModified()
   }, [])
@@ -381,10 +386,11 @@ function App() {
             onMouseEnter={handleSidebarMouseEnter}
             onMouseLeave={handleSidebarMouseLeave}
             onRefreshFolder={handleRefreshFolder}
+            onClose={() => setSidebarVisible(false)}
           />
 
           {showWelcome && (
-            <WelcomePage
+            <WelcomePage key={welcomeKey}
               onNew={handleNew}
               onOpenFile={handleOpenFile}
               onLinkFolder={handleLinkFolder}
@@ -446,22 +452,11 @@ function App() {
         </div>
       )}
 
-      {showMermaidDialog && (
-        <Suspense fallback={null}>
-          <MermaidDialog
-            onInsert={handleMermaidInsert}
-            onClose={() => setShowMermaidDialog(false)}
-          />
-        </Suspense>
-      )}
-
       {showFormulaDialog && (
-        <Suspense fallback={null}>
-          <FormulaDialog
-            onInsert={handleFormulaInsert}
-            onClose={() => setShowFormulaDialog(false)}
-          />
-        </Suspense>
+        <FormulaDialog
+          onInsert={handleFormulaInsert}
+          onClose={() => setShowFormulaDialog(false)}
+        />
       )}
 
       {showSettings && (

@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { Bold, Italic, Strikethrough, Highlighter, Code, Link2, Check, Quote, List, CheckSquare, Type, PieChart, Sigma } from 'lucide-react'
+import { Bold, Italic, Strikethrough, Highlighter, Code, Link2, Check, Quote, List, CheckSquare, Type, Sigma } from 'lucide-react'
 import { HEADING_ENTRIES } from '../types'
 
 interface InlineToolbarProps {
@@ -15,12 +15,11 @@ interface InlineToolbarProps {
   onQuote: () => void
   onList: () => void
   onTask: () => void
-  onMermaid?: () => void
   onMath?: () => void
   onClose: () => void
 }
 
-function InlineToolbar({ top, left, onBold, onItalic, onStrikethrough, onHighlight, onCode, onLink, onHeading, onQuote, onList, onTask, onMermaid, onMath, onClose }: InlineToolbarProps) {
+function InlineToolbar({ top, left, onBold, onItalic, onStrikethrough, onHighlight, onCode, onLink, onHeading, onQuote, onList, onTask, onMath, onClose }: InlineToolbarProps) {
   const [showLinkInput, setShowLinkInput] = useState(false)
   const [showHeading, setShowHeading] = useState(false)
   const [linkUrl, setLinkUrl] = useState('')
@@ -179,18 +178,6 @@ function InlineToolbar({ top, left, onBold, onItalic, onStrikethrough, onHighlig
         <CheckSquare size={14} />
       </button>
 
-      {onMermaid && onMath && (
-        <div className="w-px h-5 bg-[#e5e5e5] dark:bg-[#38383a] mx-0.5" />
-      )}
-      {onMermaid && (
-        <button
-          onClick={() => { onMermaid(); onClose() }}
-          className="w-7 h-7 flex items-center justify-center text-sm text-[#86868f] dark:text-[#98989d] hover:bg-[#e5e5e5] dark:hover:bg-[#3a3a3c] rounded transition-colors"
-          title="Mermaid 图表"
-        >
-          <PieChart size={14} />
-        </button>
-      )}
       {onMath && (
         <button
           onClick={() => { onMath(); onClose() }}

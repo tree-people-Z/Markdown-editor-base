@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react'
 import {
   FilePlus, FileText, Folder, FolderOpen, Search,
   ChevronRight, ChevronDown, Link2, Unlink, RefreshCw,
-  List, FolderTree,
+  List, FolderTree, ChevronLeft,
 } from 'lucide-react'
 import type { FolderEntry } from '../types'
 
@@ -19,12 +19,13 @@ interface SidebarProps {
   onMouseEnter: () => void
   onMouseLeave: () => void
   onRefreshFolder?: () => void
+  onClose?: () => void
 }
 
 function Sidebar({
   onNew, onOpenFile, folderPath, folderEntries,
   onLinkFolder, linkedFolderPath,
-  isVisible, onMouseEnter, onMouseLeave, onRefreshFolder,
+  isVisible, onMouseEnter, onMouseLeave, onRefreshFolder, onClose,
 }: SidebarProps) {
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set())
   const [searchQuery, setSearchQuery] = useState('')
@@ -78,7 +79,7 @@ function Sidebar({
       )}
 
       <div
-        className={`absolute left-0 top-0 bottom-0 w-64 z-20 bg-[#f5f5f7] dark:bg-[#1c1c1e] border-r border-[#e5e5e5] dark:border-[#38383a] flex flex-col select-none shadow-xl transition-all duration-500 ${
+        className={`sidebar-panel absolute left-0 top-0 bottom-0 w-64 z-20 bg-[#f5f5f7] dark:bg-[#1c1c1e] border-r border-[#e5e5e5] dark:border-[#38383a] flex flex-col select-none shadow-xl transition-all duration-500 ${
           isVisible ? 'translate-x-0' : '-translate-x-full'
         }`}
         style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
@@ -118,6 +119,15 @@ function Sidebar({
               title="刷新"
             >
               <RefreshCw size={13} />
+            </button>
+          )}
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="w-7 h-7 flex items-center justify-center text-[#86868f] dark:text-[#98989d] hover:bg-[#e5e5e5] dark:hover:bg-[#2c2c2e] rounded-md transition-colors flex-shrink-0"
+              title="收起侧栏"
+            >
+              <ChevronLeft size={15} />
             </button>
           )}
         </div>

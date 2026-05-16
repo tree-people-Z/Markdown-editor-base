@@ -1,12 +1,11 @@
 import { forwardRef, useImperativeHandle, useEffect, useRef, useState, useCallback } from 'react'
-import { EditorView, keymap, lineNumbers, Decoration, DecorationSet } from '@codemirror/view'
+import { EditorView, keymap, lineNumbers, Decoration, DecorationSet, WidgetType } from '@codemirror/view'
 import { EditorState, StateField, StateEffect, RangeSetBuilder, Compartment } from '@codemirror/state'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { defaultKeymap, indentWithTab, undo, redo, history } from '@codemirror/commands'
 import { closeBrackets } from '@codemirror/autocomplete'
 import { syntaxHighlighting, HighlightStyle, syntaxTree } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
-import { MermaidWidget } from './MermaidWidget'
 import { MathWidget } from './MathWidget'
 import InlineToolbar from './InlineToolbar'
 import type { EditorSettings } from './SettingsPanel'
@@ -62,7 +61,6 @@ const createHighlight = (c: { heading: string; heading6: string; link: string; q
     { tag: tags.quote, fontStyle: 'italic', color: c.quote },
     { tag: tags.list, color: c.list },
     { tag: tags.contentSeparator, class: 'cm-hr', color: c.hr },
-    { tag: tags.processingInstruction, display: 'none' },
     { tag: tags.comment, color: c.muted },
     { tag: tags.meta, color: c.muted },
   ])
@@ -99,7 +97,7 @@ function createTheme(p: ThemePalette) {
       ...(p.lineWrapping ? { overflowWrap: 'break-word', wordBreak: 'break-word' } : {}),
     },
     '.cm-content': {
-      padding: '0 48px 48px', caretColor: p.caret,
+      padding: '0 48px 48px', boxSizing: 'border-box', caretColor: p.caret,
       fontFamily: "-apple-system, 'Segoe UI', 'Inter', 'SF Pro Text', Roboto, Helvetica, Arial, sans-serif",
       ...(p.contentColor ? { color: p.contentColor } : {}),
     },
@@ -117,8 +115,7 @@ function createTheme(p: ThemePalette) {
     },
     '.cm-activeLineGutter': { backgroundColor: p.activeGutter },
     '.cm-activeLine': { backgroundColor: 'transparent' },
-    '.cm-hr': { display: 'block', borderTop: `1px solid ${p.hr}`, margin: '16px 0', textAlign: 'center', lineHeight: '0' },
-    '.cm-hr::after': { content: '" "', display: 'inline-block' },
+    '.cm-hr': { display: 'inline-block', width: '100%', borderTop: `1px solid ${p.hr}`, margin: '12px 0', lineHeight: '0', color: 'transparent' },
     'table': { borderCollapse: 'collapse', margin: '12px 0', width: '100%' },
     'th, td': {
       border: `1px solid ${p.tableBorder}`, padding: '8px 12px', textAlign: 'left', fontSize: `${Math.max(12, fontSize - 3)}px`,
@@ -126,9 +123,8 @@ function createTheme(p: ThemePalette) {
     },
     'th': { backgroundColor: p.thBg, fontWeight: '600' },
     '.cm-blockcode': {
-      background: p.codeBg, borderRadius: '6px', padding: '16px', margin: '8px 0',
       fontFamily: "'SF Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace",
-      fontSize: `${Math.max(12, fontSize - 3)}px`, lineHeight: '1.5', overflow: 'auto',
+      fontSize: `${Math.max(12, fontSize - 3)}px`, lineHeight: '1.5',
     },
     '.cm-blockcode .cm-inline-code': { background: 'transparent', padding: '0' },
     '.cm-formatting-hide': { display: 'none' },
@@ -184,6 +180,98 @@ const italicDeco = Decoration.mark({ class: 'cm-manual-em' })
 const strikeDeco = Decoration.mark({ class: 'cm-manual-strikethrough' })
 const codeDeco = Decoration.mark({ class: 'cm-manual-code' })
 const boldItalicDeco = Decoration.mark({ class: 'cm-manual-strong cm-manual-em' })
+
+class TaskCheckboxWidget extends WidgetType {
+  constructor(readonly checked: boolean) { super() }
+  eq(other: TaskCheckboxWidget) { return other.checked === this.checked }
+
+  toDOM() {
+    const input = document.createElement('input')
+    input.type = 'checkbox'
+    input.checked = this.checked
+    input.className = 'cm-task-checkbox'
+    input.addEventListener('mousedown', (e: MouseEvent) => e.stopPropagation())
+    input.addEventListener('click', (e: MouseEvent) => {
+      e.stopPropagation()
+      const view = EditorView.findFromDOM(input)
+      if (!view) return
+      const pos = view.posAtDOM(input)
+      if (pos == null) return
+      const toggle = this.checked ? '[ ]' : '[x]'
+      view.dispatch({ changes: { from: pos, to: pos + 3, insert: toggle } })
+      view.focus()
+    })
+    return input
+  }
+  ignoreEvent() { return false }
+}
+
+function computeTaskListDecorations(state: EditorState): DecorationSet {
+  const docStr = state.doc.toString()
+  if (!docStr.includes('[')) return Decoration.none
+  const all: { from: number; to: number; deco: Decoration }[] = []
+  const regex = /^(?:[-*+]\s+)\[([ x])\]/gm
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(docStr)) !== null) {
+    const start = match.index + match[0].length - 3
+    const end = start + 3
+    const checked = match[1] === 'x'
+    all.push({ from: start, to: end, deco: hideDeco })
+    all.push({ from: start, to: start, deco: Decoration.widget({ widget: new TaskCheckboxWidget(checked), side: -1 }) })
+  }
+  if (all.length === 0) return Decoration.none
+  all.sort((a, b) => a.from - b.from || a.to - b.to)
+  const builder = new RangeSetBuilder<Decoration>()
+  for (const r of all) builder.add(r.from, r.to, r.deco)
+  return builder.finish()
+}
+
+function computeFencedCodeDecorations(state: EditorState): DecorationSet {
+  const docStr = state.doc.toString()
+  if (!docStr.includes('```')) return Decoration.none
+  const all: { from: number; to: number; deco: Decoration }[] = []
+  const cursor = state.selection.main.head
+
+  for (let i = 1; i <= state.doc.lines; i++) {
+    const line = state.doc.line(i)
+    if (!line.text.trimStart().startsWith('```')) continue
+    const blockStart = line.from
+    let closingLine = 0
+    for (let j = i + 1; j <= state.doc.lines; j++) {
+      const l = state.doc.line(j)
+      if (l.text.trimStart().startsWith('```')) { closingLine = j; break }
+    }
+    if (!closingLine) continue
+    const blockEnd = state.doc.line(closingLine).to
+    const cursorInBlock = cursor >= blockStart && cursor < blockEnd
+    if (!cursorInBlock) {
+      class CodeBlockWidget extends WidgetType {
+        eq() { return true }
+        toDOM() {
+          const div = document.createElement('div')
+          div.className = 'cm-code-block'
+          const pre = document.createElement('pre')
+          const code: string[] = []
+          for (let k = i + 1; k < closingLine; k++) {
+            code.push(state.doc.line(k).text)
+          }
+          pre.textContent = code.join('\n')
+          div.appendChild(pre)
+          return div
+        }
+        ignoreEvent() { return true }
+      }
+      all.push({ from: blockStart, to: blockEnd, deco: Decoration.replace({ widget: new CodeBlockWidget(), block: true }) })
+    }
+    i = closingLine
+  }
+
+  if (all.length === 0) return Decoration.none
+  all.sort((a, b) => a.from - b.from || a.to - b.to)
+  const builder = new RangeSetBuilder<Decoration>()
+  for (const r of all) builder.add(r.from, r.to, r.deco)
+  return builder.finish()
+}
 
 const emphasisRegexps = [
   { re: /\*\*\*(.+?)\*\*\*/g, markerLen: 3, deco: boldItalicDeco },
@@ -249,41 +337,6 @@ function computeHighlightDecorations(state: EditorState): DecorationSet {
   return builder.finish()
 }
 
-function computeMermaidDecorations(state: EditorState): DecorationSet {
-  const builder = new RangeSetBuilder<Decoration>()
-  const docStr = state.doc.toString()
-  if (!docStr.includes('```mermaid')) return builder.finish()
-  const cursor = state.selection.main.head
-  const doc = state.doc
-
-  for (let i = 1; i <= doc.lines; i++) {
-    const line = doc.line(i)
-    if (line.text.trim() !== '```mermaid') continue
-    const blockStart = line.from
-    let closingLine = 0
-    const codeLines: string[] = []
-    for (let j = i + 1; j <= doc.lines; j++) {
-      const l = doc.line(j)
-      if (l.text.trim() === '```') { closingLine = j; break }
-      codeLines.push(l.text)
-    }
-    if (!closingLine) continue
-    const code = codeLines.join('\n')
-    const blockEnd = doc.line(closingLine).to
-    const codeStart = line.to
-    const codeEnd = doc.line(closingLine).from
-    const cursorInCode = cursor > codeStart && cursor < codeEnd
-    if (!cursorInCode && code.trim()) {
-      builder.add(blockStart, blockEnd, Decoration.replace({
-        widget: new MermaidWidget(code.trim(), state.field(darkModeField, false)!),
-        block: true,
-      }))
-    }
-    i = closingLine
-  }
-  return builder.finish()
-}
-
 function computeMathDecorations(state: EditorState): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>()
   const docStr = state.doc.toString()
@@ -325,10 +378,11 @@ function combineDecorations(state: EditorState): DecorationSet {
       all.push({ from, to, deco: value })
     })
   }
-  collect(computeMermaidDecorations(state))
   collect(computeMathDecorations(state))
   collect(computeManualEmphasis(state))
   collect(computeHighlightDecorations(state))
+  collect(computeTaskListDecorations(state))
+  collect(computeFencedCodeDecorations(state))
   all.sort((a, b) => a.from - b.from || a.to - b.to)
   const builder = new RangeSetBuilder<Decoration>()
   for (const r of all) builder.add(r.from, r.to, r.deco)
@@ -341,21 +395,6 @@ const wysiwygField = StateField.define<DecorationSet>({
   provide: f => EditorView.decorations.from(f),
 })
 
-function wrapContent(text: string, maxChars: number): string {
-  text = text.replace(/\r/g, '')
-  const lines = text.split('\n')
-  const out: string[] = []
-  for (const line of lines) {
-    if (line.length <= maxChars) {
-      out.push(line)
-    } else {
-      for (let i = 0; i < line.length; i += maxChars)
-        out.push(line.slice(i, i + maxChars))
-    }
-  }
-  return out.join('\n')
-}
-
 const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   { darkMode, settings, linkedFolderPath, onContentChange, onModifiedChange, onFilePathChange, onCursorChange, onWordCountChange },
   ref,
@@ -366,7 +405,6 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const modifiedRef = useRef(false)
   const suppressModifiedRef = useRef(false)
-  const skipHardWrapRef = useRef(false)
   const filePathRef = useRef<string | null>(null)
   const themeCompartmentRef = useRef(new Compartment())
   const highlightCompartmentRef = useRef(new Compartment())
@@ -374,9 +412,6 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
   const wordCountTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hardWrapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const maxChars = Math.max(30, Math.floor(((settings?.editorWidth || 800) - 128) / ((settings?.fontSize || 18) * 0.85)))
-  const maxCharsRef = useRef(maxChars)
-  maxCharsRef.current = maxChars
   const onContentChangeRef = useRef(onContentChange)
   const onModifiedChangeRef = useRef(onModifiedChange)
   const onFilePathChangeRef = useRef(onFilePathChange)
@@ -392,6 +427,40 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   onCursorChangeRef.current = onCursorChange
   onWordCountChangeRef.current = onWordCountChange
   titleRef.current = title
+
+  const applyHardWrap = () => {
+    const v = viewRef.current
+    if (!v) return
+    const doc = v.state.doc
+    const changes: { from: number; to: number; insert: string }[] = []
+
+    for (let i = 1; i <= doc.lines; i++) {
+      const line = doc.line(i)
+      if (line.length < 2) continue
+
+      const wraps: number[] = []
+      const startCoords = v.coordsAtPos(line.from)
+      if (!startCoords) continue
+      let prevY = startCoords.top
+
+      for (let pos = line.from + 1; pos <= line.to; pos++) {
+        const c = v.coordsAtPos(pos)
+        if (!c) continue
+        if (c.top !== prevY) {
+          wraps.push(pos - 1)
+          prevY = c.top
+        }
+      }
+
+      for (const wp of wraps)
+        changes.push({ from: wp, to: wp, insert: '\n' })
+    }
+
+    if (changes.length > 0) {
+      suppressModifiedRef.current = true
+      v.dispatch({ changes })
+    }
+  }
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -475,7 +544,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     }
 
     const palette = darkMode ? darkPalette : lightPalette
-    const s = settings || { fontSize: 18, showLineNumbers: true, lineWrapping: false, editorWidth: 800, autoSave: true, autoSaveInterval: 30 }
+    const s = settings || { fontSize: 18, showLineNumbers: true, lineWrapping: true, editorWidth: 800, autoSave: true, autoSaveInterval: 30 }
     const settingsTheme = buildTheme(palette, s)
 
     const view = new EditorView({
@@ -512,23 +581,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
               if (hardWrapTimerRef.current) clearTimeout(hardWrapTimerRef.current)
               hardWrapTimerRef.current = setTimeout(() => {
                 hardWrapTimerRef.current = null
-                if (skipHardWrapRef.current) { skipHardWrapRef.current = false; return }
-                const v = viewRef.current
-                if (!v) return
-                const mc = Math.max(30, Math.floor(((settings?.editorWidth || 800) - 128) / ((settings?.fontSize || 18) * 0.85)))
-                const doc = v.state.doc
-                const changes: { from: number; to: number; insert: string }[] = []
-                for (let i = 1; i <= doc.lines; i++) {
-                  const line = doc.line(i)
-                  if (line.length > mc + 8) {
-                    for (let pos = mc; pos < line.length; pos += mc)
-                      changes.push({ from: line.from + pos, to: line.from + pos, insert: '\n' })
-                  }
-                }
-                if (changes.length > 0) {
-                  suppressModifiedRef.current = true
-                  v.dispatch({ changes })
-                }
+                applyHardWrap()
               }, 0)
             }
 
@@ -562,7 +615,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     const editorDom = editorRef.current
     const handleDoubleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement
-      const widget = target.closest('.cm-mermaid-widget, .cm-math-widget')
+      const widget = target.closest('.cm-math-widget, .cm-code-block')
       if (!widget || !viewRef.current) return
       const pos = viewRef.current.posAtDOM(widget)
       if (pos != null) {
@@ -642,7 +695,6 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   const insertInline = useCallback((type: 'bold' | 'italic' | 'strikethrough' | 'highlight' | 'code' | 'link' | 'image', url?: string) => {
     const view = viewRef.current
     if (!view) return
-    skipHardWrapRef.current = true
 
     if (type === 'link' || type === 'image') {
       const sel = view.state.selection.main
@@ -738,15 +790,14 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
 const BLOCK_INSERT: Record<string, string> = {
   h1: '# ', h2: '## ', h3: '### ', h4: '#### ', h5: '##### ', h6: '###### ',
-  quote: '> ', codeblock: '```\n\n```', mermaid: '```mermaid\n\n```',
+  quote: '> ', codeblock: '```\n\n```',
   math: '$$\n\n$$', ul: '- ', ol: '1. ', task: '- [ ] ',
   hr: '\n---\n', table: '\n| 列1 | 列2 | 列3 |\n| --- | --- | --- |\n| 内容 | 内容 | 内容 |\n',
 }
 
-  const insertBlock = useCallback((type: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6' | 'quote' | 'codeblock' | 'ul' | 'ol' | 'task' | 'hr' | 'table' | 'mermaid' | 'math') => {
+  const insertBlock = useCallback((type: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6' | 'quote' | 'codeblock' | 'ul' | 'ol' | 'task' | 'hr' | 'table' | 'math') => {
     const view = viewRef.current
     if (!view) return
-    skipHardWrapRef.current = true
 
     const pos = view.state.selection.main.head
     const line = view.state.doc.lineAt(pos)
@@ -754,12 +805,17 @@ const BLOCK_INSERT: Record<string, string> = {
 
     const insertion = BLOCK_INSERT[type] || ''
 
-    if (type === 'hr' || type === 'table') {
+    if (type === 'hr') {
       view.dispatch({
-        changes: { from: pos, to: pos, insert: insertion },
-        selection: { anchor: pos + insertion.length },
+        changes: { from: lineStart, to: line.from + line.length, insert: '---\n' },
+        selection: { anchor: lineStart + 4 },
       })
-    } else if (type === 'codeblock' || type === 'mermaid' || type === 'math') {
+    } else if (type === 'table') {
+      view.dispatch({
+        changes: { from: lineStart, to: line.from + line.length, insert: '\n| 列1 | 列2 | 列3 |\n| --- | --- | --- |\n| 内容 | 内容 | 内容 |\n' },
+        selection: { anchor: lineStart + 1 },
+      })
+    } else if (type === 'codeblock' || type === 'math') {
       view.dispatch({
         changes: { from: lineStart, to: lineStart, insert: insertion },
         selection: { anchor: lineStart + 3, head: lineStart + 3 },
@@ -797,8 +853,9 @@ const BLOCK_INSERT: Record<string, string> = {
       if (!view) return
       suppressModifiedRef.current = true
       view.dispatch({
-        changes: { from: 0, to: view.state.doc.length, insert: wrapContent(content, maxCharsRef.current) },
+        changes: { from: 0, to: view.state.doc.length, insert: content },
       })
+      applyHardWrap()
       modifiedRef.current = false
       onModifiedChangeRef.current?.(false)
     },
@@ -850,8 +907,9 @@ const BLOCK_INSERT: Record<string, string> = {
       titleRef.current = ''
       suppressModifiedRef.current = true
       view.dispatch({
-        changes: { from: 0, to: view.state.doc.length, insert: wrapContent('\n'.repeat(20), maxCharsRef.current) },
+        changes: { from: 0, to: view.state.doc.length, insert: '\n'.repeat(20) },
       })
+      applyHardWrap()
       modifiedRef.current = false
       onModifiedChangeRef.current?.(false)
       filePathRef.current = null
@@ -869,8 +927,9 @@ const BLOCK_INSERT: Record<string, string> = {
       titleRef.current = fileName
       suppressModifiedRef.current = true
       view.dispatch({
-        changes: { from: 0, to: view.state.doc.length, insert: wrapContent(result.content, maxCharsRef.current) },
+        changes: { from: 0, to: view.state.doc.length, insert: result.content },
       })
+      applyHardWrap()
       modifiedRef.current = false
       onModifiedChangeRef.current?.(false)
       filePathRef.current = result.filePath
@@ -916,7 +975,7 @@ const BLOCK_INSERT: Record<string, string> = {
   useEffect(() => {
     const view = viewRef.current
     if (!view) return
-    const s = settings || { fontSize: 18, showLineNumbers: true, lineWrapping: false, editorWidth: 800, autoSave: true, autoSaveInterval: 30 }
+    const s = settings || { fontSize: 18, showLineNumbers: true, lineWrapping: true, editorWidth: 800, autoSave: true, autoSaveInterval: 30 }
     const palette = darkMode ? darkPalette : lightPalette
     const settingsTheme = buildTheme(palette, s)
     view.dispatch({
@@ -982,7 +1041,6 @@ const BLOCK_INSERT: Record<string, string> = {
           onQuote={() => insertBlock('quote')}
           onList={() => insertBlock('ul')}
           onTask={() => insertBlock('task')}
-          onMermaid={() => insertBlock('mermaid')}
           onMath={() => insertBlock('math')}
           onClose={() => setInlineToolbar(null)}
         />
