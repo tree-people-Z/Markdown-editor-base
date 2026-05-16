@@ -99,7 +99,7 @@ function createTheme(p: ThemePalette) {
       ...(p.lineWrapping ? { overflowWrap: 'break-word', wordBreak: 'break-word' } : {}),
     },
     '.cm-content': {
-      padding: '0 64px 48px', caretColor: p.caret,
+      padding: '0 48px 48px', caretColor: p.caret,
       fontFamily: "-apple-system, 'Segoe UI', 'Inter', 'SF Pro Text', Roboto, Helvetica, Arial, sans-serif",
       ...(p.contentColor ? { color: p.contentColor } : {}),
     },
@@ -183,18 +183,21 @@ const boldDeco = Decoration.mark({ class: 'cm-manual-strong' })
 const italicDeco = Decoration.mark({ class: 'cm-manual-em' })
 const strikeDeco = Decoration.mark({ class: 'cm-manual-strikethrough' })
 const codeDeco = Decoration.mark({ class: 'cm-manual-code' })
+const boldItalicDeco = Decoration.mark({ class: 'cm-manual-strong cm-manual-em' })
 
 const emphasisRegexps = [
-  { re: /\*\*([\s\S]+?)\*\*/g, markerLen: 2, deco: boldDeco },
-  { re: /(?<!\*)\*(?!\*)([\s\S]+?)(?<!\*)\*(?!\*)/g, markerLen: 1, deco: italicDeco },
-  { re: /~~([\s\S]+?)~~/g, markerLen: 2, deco: strikeDeco },
-  { re: /`([\s\S]+?)`/g, markerLen: 1, deco: codeDeco },
+  { re: /\*\*\*(.+?)\*\*\*/g, markerLen: 3, deco: boldItalicDeco },
+  { re: /\*\*(.+?)\*\*/g, markerLen: 2, deco: boldDeco },
+  { re: /(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, markerLen: 1, deco: italicDeco },
+  { re: /~~(.+?)~~/g, markerLen: 2, deco: strikeDeco },
+  { re: /`(.+?)`/g, markerLen: 1, deco: codeDeco },
 ]
 
 function computeManualEmphasis(state: EditorState): DecorationSet {
-  const builder = new RangeSetBuilder<Decoration>()
   const docStr = state.doc.toString()
-  if (docStr.length < 2 || (!docStr.includes('*') && !docStr.includes('~') && !docStr.includes('`') && !docStr.includes('='))) return builder.finish()
+  if (docStr.length < 2 || (!docStr.includes('*') && !docStr.includes('~') && !docStr.includes('`'))) return Decoration.none
+
+  const all: { from: number; to: number; deco: Decoration }[] = []
 
   for (const { re, markerLen, deco } of emphasisRegexps) {
     re.lastIndex = 0
@@ -207,20 +210,25 @@ function computeManualEmphasis(state: EditorState): DecorationSet {
 
       if (innerEnd <= innerStart) continue
 
-      builder.add(start, innerStart, hideDeco)
-      builder.add(innerStart, innerEnd, deco)
-      builder.add(innerEnd, end, hideDeco)
+      all.push({ from: start, to: innerStart, deco: hideDeco })
+      all.push({ from: innerStart, to: innerEnd, deco })
+      all.push({ from: innerEnd, to: end, deco: hideDeco })
     }
   }
 
+  if (all.length === 0) return Decoration.none
+  all.sort((a, b) => a.from - b.from || a.to - b.to)
+  const builder = new RangeSetBuilder<Decoration>()
+  for (const r of all) builder.add(r.from, r.to, r.deco)
   return builder.finish()
 }
 
 function computeHighlightDecorations(state: EditorState): DecorationSet {
-  const builder = new RangeSetBuilder<Decoration>()
   const docStr = state.doc.toString()
-  if (!docStr.includes('==')) return builder.finish()
-  const regex = /==([\s\S]+?)==/g
+  if (!docStr.includes('==')) return Decoration.none
+
+  const all: { from: number; to: number; deco: Decoration }[] = []
+  const regex = /==(.+?)==/g
   regex.lastIndex = 0
   let match: RegExpExecArray | null
   while ((match = regex.exec(docStr)) !== null) {
@@ -229,10 +237,15 @@ function computeHighlightDecorations(state: EditorState): DecorationSet {
     const innerEnd = start + match[0].length - 2
     const end = start + match[0].length
     if (innerEnd <= innerStart) continue
-    builder.add(start, innerStart, hideDeco)
-    builder.add(innerStart, innerEnd, Decoration.mark({ class: 'cm-manual-highlight' }))
-    builder.add(innerEnd, end, hideDeco)
+    all.push({ from: start, to: innerStart, deco: hideDeco })
+    all.push({ from: innerStart, to: innerEnd, deco: Decoration.mark({ class: 'cm-manual-highlight' }) })
+    all.push({ from: innerEnd, to: end, deco: hideDeco })
   }
+
+  if (all.length === 0) return Decoration.none
+  all.sort((a, b) => a.from - b.from || a.to - b.to)
+  const builder = new RangeSetBuilder<Decoration>()
+  for (const r of all) builder.add(r.from, r.to, r.deco)
   return builder.finish()
 }
 
@@ -353,6 +366,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const modifiedRef = useRef(false)
   const suppressModifiedRef = useRef(false)
+  const skipHardWrapRef = useRef(false)
   const filePathRef = useRef<string | null>(null)
   const themeCompartmentRef = useRef(new Compartment())
   const highlightCompartmentRef = useRef(new Compartment())
@@ -360,7 +374,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
   const wordCountTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hardWrapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const maxChars = Math.max(30, Math.floor(((settings?.editorWidth || 800) - 128) / ((settings?.fontSize || 18) * 0.6)))
+  const maxChars = Math.max(30, Math.floor(((settings?.editorWidth || 800) - 128) / ((settings?.fontSize || 18) * 0.85)))
   const maxCharsRef = useRef(maxChars)
   maxCharsRef.current = maxChars
   const onContentChangeRef = useRef(onContentChange)
@@ -498,14 +512,15 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
               if (hardWrapTimerRef.current) clearTimeout(hardWrapTimerRef.current)
               hardWrapTimerRef.current = setTimeout(() => {
                 hardWrapTimerRef.current = null
+                if (skipHardWrapRef.current) { skipHardWrapRef.current = false; return }
                 const v = viewRef.current
                 if (!v) return
-                const mc = Math.max(30, Math.floor(((settings?.editorWidth || 800) - 128) / ((settings?.fontSize || 18) * 0.6)))
+                const mc = Math.max(30, Math.floor(((settings?.editorWidth || 800) - 128) / ((settings?.fontSize || 18) * 0.85)))
                 const doc = v.state.doc
                 const changes: { from: number; to: number; insert: string }[] = []
                 for (let i = 1; i <= doc.lines; i++) {
                   const line = doc.line(i)
-                  if (line.length > mc) {
+                  if (line.length > mc + 8) {
                     for (let pos = mc; pos < line.length; pos += mc)
                       changes.push({ from: line.from + pos, to: line.from + pos, insert: '\n' })
                   }
@@ -627,6 +642,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   const insertInline = useCallback((type: 'bold' | 'italic' | 'strikethrough' | 'highlight' | 'code' | 'link' | 'image', url?: string) => {
     const view = viewRef.current
     if (!view) return
+    skipHardWrapRef.current = true
 
     if (type === 'link' || type === 'image') {
       const sel = view.state.selection.main
@@ -730,6 +746,7 @@ const BLOCK_INSERT: Record<string, string> = {
   const insertBlock = useCallback((type: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6' | 'quote' | 'codeblock' | 'ul' | 'ol' | 'task' | 'hr' | 'table' | 'mermaid' | 'math') => {
     const view = viewRef.current
     if (!view) return
+    skipHardWrapRef.current = true
 
     const pos = view.state.selection.main.head
     const line = view.state.doc.lineAt(pos)
@@ -943,7 +960,7 @@ const BLOCK_INSERT: Record<string, string> = {
             width: '100%',
             maxWidth: `${editorWidth}px`,
             margin: '0 auto',
-            padding: '24px 64px 16px',
+            padding: '24px 48px 16px',
             fontSize: `${fontSize + 6}px`,
             fontWeight: 700,
             textAlign: 'center',

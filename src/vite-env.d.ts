@@ -21,6 +21,8 @@ interface ElectronAPI {
   windowClose: () => Promise<void>
   windowIsMaximized: () => Promise<boolean>
   onMaximizeChange: (callback: (maximized: boolean) => void) => () => void
+  exportHtmlDialog: (markdown: string, darkMode: boolean) => Promise<string | null>
+  exportPdf: (markdown: string, darkMode: boolean) => Promise<string | null>
 }
 
 interface Window {

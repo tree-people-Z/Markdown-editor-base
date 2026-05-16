@@ -5,7 +5,7 @@ import {
   Type, Quote, List, ListOrdered, CheckSquare,
   Table, Image, Minus, FileCode, Undo2, Redo2,
   PieChart, Sigma, MoreHorizontal, Settings, Home,
-  Highlighter,
+  Highlighter, FileDown,
 } from 'lucide-react'
 import type { InlineFormatType, BlockFormatType } from '../types'
 import { HEADING_ENTRIES } from '../types'
@@ -22,6 +22,8 @@ interface ToolbarProps {
   onBlock?: (type: BlockFormatType) => void
   onUndo?: () => void
   onRedo?: () => void
+  onExportHtml?: () => void
+  onExportPdf?: () => void
 }
 
 function Toolbar({
@@ -36,6 +38,8 @@ function Toolbar({
   onBlock,
   onUndo,
   onRedo,
+  onExportHtml,
+  onExportPdf,
 }: ToolbarProps) {
   const [showHeading, setShowHeading] = useState(false)
   const [showMoreMenu, setShowMoreMenu] = useState(false)
@@ -167,6 +171,21 @@ function Toolbar({
             >
               <Sigma size={14} />
               <span>数学公式</span>
+            </button>
+            <div className="h-px bg-[#e5e5e5] dark:bg-[#38383a] my-1" />
+            <button
+              onClick={() => { onExportHtml?.(); setShowMoreMenu(false) }}
+              className="w-full px-3 py-1.5 text-xs text-left text-[#1d1d1f] dark:text-[#f5f5f7] hover:bg-[#e5e5e5] dark:hover:bg-[#3a3a3c] flex items-center gap-2 transition-colors"
+            >
+              <FileDown size={14} />
+              <span>导出 HTML</span>
+            </button>
+            <button
+              onClick={() => { onExportPdf?.(); setShowMoreMenu(false) }}
+              className="w-full px-3 py-1.5 text-xs text-left text-[#1d1d1f] dark:text-[#f5f5f7] hover:bg-[#e5e5e5] dark:hover:bg-[#3a3a3c] flex items-center gap-2 transition-colors"
+            >
+              <FileDown size={14} />
+              <span>导出 PDF</span>
             </button>
           </div>
         )}

@@ -69,4 +69,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('maximize-change', handler)
     return () => ipcRenderer.removeListener('maximize-change', handler)
   },
+
+  exportHtmlDialog: (markdown: string, darkMode: boolean): Promise<string | null> =>
+    ipcRenderer.invoke('exportHtmlDialog', { markdown, darkMode }),
+
+  exportPdf: (markdown: string, darkMode: boolean): Promise<string | null> =>
+    ipcRenderer.invoke('exportPdf', { markdown, darkMode }),
 })

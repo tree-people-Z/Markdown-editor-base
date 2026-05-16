@@ -12,36 +12,39 @@ function WindowControls() {
   }, [])
 
   return (
-    <div className="flex items-center gap-2 select-none ml-3">
-      <button
-        onClick={() => window.electronAPI?.windowClose()}
-        className="w-3 h-3 rounded-full bg-[#ff5f57] hover:brightness-90 transition-all duration-75 flex items-center justify-center group"
-        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-      >
-        <svg className="w-2 h-2 text-[#4d1f1d] opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 8 8">
-          <path d="M1.5 1.5L6.5 6.5M6.5 1.5L1.5 6.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-        </svg>
-      </button>
+    <div className="flex" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
       <button
         onClick={() => window.electronAPI?.windowMinimize()}
-        className="w-3 h-3 rounded-full bg-[#febc2e] hover:brightness-90 transition-all duration-75 flex items-center justify-center group"
-        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        className="w-11 h-full flex items-center justify-center text-[#86868f] dark:text-[#636366] hover:bg-[#e5e5e5] dark:hover:bg-[#2c2c2e] active:bg-[#d5d5d7] dark:active:bg-[#3a3a3c] transition-colors"
+        title="最小化"
       >
-        <svg className="w-2 h-2 text-[#8a6d1a] opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 8 8">
-          <path d="M2 4H6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+        <svg width="10" height="1" viewBox="0 0 10 1">
+          <rect width="10" height="1" fill="currentColor" />
         </svg>
       </button>
       <button
         onClick={() => window.electronAPI?.windowMaximize()}
-        className="w-3 h-3 rounded-full bg-[#28c840] hover:brightness-90 transition-all duration-75 flex items-center justify-center group"
-        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        className="w-11 h-full flex items-center justify-center text-[#86868f] dark:text-[#636366] hover:bg-[#e5e5e5] dark:hover:bg-[#2c2c2e] active:bg-[#d5d5d7] dark:active:bg-[#3a3a3c] transition-colors"
+        title={isMaximized ? '还原' : '最大化'}
       >
-        <svg className="w-2 h-2 text-[#1a6b24] opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 8 8">
-          {isMaximized ? (
-            <path d="M2.5 5.5V6.5H6.5V2.5H5.5" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-          ) : (
-            <path d="M2 2L6 6M6 2L2 6" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
-          )}
+        {isMaximized ? (
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2">
+            <rect x="2" y="0.5" width="7.5" height="7.5" rx="1" />
+            <rect x="0.5" y="2" width="7.5" height="7.5" rx="1" fill="currentColor" className="text-[#f5f5f7] dark:text-[#1c1c1e]" />
+          </svg>
+        ) : (
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2">
+            <rect x="0.5" y="0.5" width="9" height="9" rx="1" />
+          </svg>
+        )}
+      </button>
+      <button
+        onClick={() => window.electronAPI?.windowClose()}
+        className="w-11 h-full flex items-center justify-center text-[#86868f] dark:text-[#636366] hover:bg-[#e81123] hover:text-white active:bg-[#bf0f1d] transition-colors"
+        title="关闭"
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+          <path d="M1 1L9 9M9 1L1 9" />
         </svg>
       </button>
     </div>

@@ -84,6 +84,20 @@ function App() {
     }
   }, [confirmUnsaved])
 
+  const handleExportHtml = useCallback(async () => {
+    const editor = editorRef.current
+    if (!editor) return
+    const markdown = editor.getContent()
+    await window.electronAPI?.exportHtmlDialog(markdown, darkMode)
+  }, [darkMode])
+
+  const handleExportPdf = useCallback(async () => {
+    const editor = editorRef.current
+    if (!editor) return
+    const markdown = editor.getContent()
+    await window.electronAPI?.exportPdf(markdown, darkMode)
+  }, [darkMode])
+
   useEffect(() => {
     const cleanup = window.electronAPI?.onMenuAction(async (action) => {
       const editor = editorRef.current
@@ -125,10 +139,16 @@ function App() {
           editor.focus()
           document.execCommand('paste')
           break
+        case 'export-html':
+          await handleExportHtml()
+          break
+        case 'export-pdf':
+          await handleExportPdf()
+          break
       }
     })
     return () => cleanup?.()
-  }, [handleExit])
+  }, [handleExit, handleExportHtml, handleExportPdf])
 
   useEffect(() => {
     const cleanup = window.electronAPI?.onBeforeClose(beforeClose)
@@ -311,21 +331,21 @@ function App() {
     <div className="h-screen w-screen bg-[#f5f5f7] dark:bg-[#1c1c1e] flex flex-col">
       {/* Title bar - distinct and prominent */}
       <div
-        className="titlebar h-10 w-full flex-shrink-0 flex items-center bg-[#f5f5f7] dark:bg-[#1c1c1e] border-b border-[#e5e5e5] dark:border-[#38383a] px-4"
+        className="titlebar h-10 w-full flex-shrink-0 flex items-center bg-[#f5f5f7] dark:bg-[#1c1c1e] border-b border-[#e5e5e5] dark:border-[#38383a]"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
-        <div className="flex items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-          <WindowControls />
-        </div>
+        <div className="flex-1" />
 
-        <div className="flex-1 flex items-center justify-center gap-2">
+        <div className="flex items-center justify-center gap-2 absolute left-1/2 -translate-x-1/2">
           <Feather size={13} className="text-[#007aff] dark:text-[#0a84ff]" />
           <span className="text-xs text-[#86868f] dark:text-[#98989d] select-none font-medium tracking-wide">
             Markdown Editor
           </span>
         </div>
 
-        <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties} />
+        <div className="h-full flex" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+          <WindowControls />
+        </div>
       </div>
 
       {/* Toolbar - formatting tools guarded when welcome page is showing */}
@@ -341,6 +361,8 @@ function App() {
         onBlock={(type) => { if (!showWelcome) handleBlock(type) }}
         onUndo={() => { if (!showWelcome) handleUndo() }}
         onRedo={() => { if (!showWelcome) handleRedo() }}
+        onExportHtml={() => { if (!showWelcome) handleExportHtml() }}
+        onExportPdf={() => { if (!showWelcome) handleExportPdf() }}
       />
 
       {/* Main content */}

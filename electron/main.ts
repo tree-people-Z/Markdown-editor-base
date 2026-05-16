@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Menu, ipcMain, dialog } from 'electron'
 import path from 'path'
 import fs from 'fs'
+import { marked } from 'marked'
 
 const isDev = !!process.env.VITE_DEV_SERVER_URL
 
@@ -35,6 +36,60 @@ if (!gotTheLock) {
       app.quit()
     }
   })
+}
+
+function buildExportHtml(markdown: string, darkMode: boolean): string {
+  const body = marked.parse(markdown, { async: false }) as string
+  const bg = darkMode ? '#1c1c1e' : '#ffffff'
+  const fg = darkMode ? '#f5f5f7' : '#1d1d1f'
+  const codeBg = darkMode ? '#2c2c2e' : '#f5f5f7'
+  const border = darkMode ? '#38383a' : '#e5e5e5'
+  const muted = darkMode ? '#98989d' : '#86868f'
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Exported</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, 'Segoe UI', 'Inter', 'SF Pro Text', Roboto, Helvetica, Arial, sans-serif;
+    background: ${bg}; color: ${fg}; line-height: 1.8; padding: 48px 64px; max-width: 800px; margin: 0 auto;
+    font-size: 16px; -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 34px; font-weight: 700; margin: 1em 0 0.3em; line-height: 1.3; }
+  h2 { font-size: 28px; font-weight: 700; margin: 1em 0 0.3em; line-height: 1.3; }
+  h3 { font-size: 24px; font-weight: 600; margin: 0.8em 0 0.2em; }
+  h4 { font-size: 20px; font-weight: 600; margin: 0.6em 0 0.2em; }
+  h5 { font-size: 18px; font-weight: 600; margin: 0.6em 0 0.2em; }
+  h6 { font-size: 16px; font-weight: 600; color: ${muted}; margin: 0.6em 0 0.2em; }
+  p { margin: 0.5em 0; }
+  a { color: #007aff; text-decoration: underline; }
+  img { max-width: 100%; border-radius: 6px; margin: 8px 0; }
+  blockquote {
+    border-left: 3px solid #007aff; padding: 4px 16px; margin: 12px 0;
+    color: ${muted}; font-style: italic;
+  }
+  code {
+    font-family: 'SF Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    background: ${codeBg}; padding: 1px 5px; border-radius: 4px; font-size: 0.9em;
+  }
+  pre { background: ${codeBg}; border-radius: 6px; padding: 16px; margin: 12px 0; overflow: auto; }
+  pre code { background: none; padding: 0; font-size: 14px; }
+  table { border-collapse: collapse; margin: 12px 0; width: 100%; }
+  th, td { border: 1px solid ${border}; padding: 8px 12px; text-align: left; }
+  th { background: ${codeBg}; font-weight: 600; }
+  hr { border: none; border-top: 1px solid ${border}; margin: 24px 0; }
+  ul, ol { padding-left: 24px; margin: 8px 0; }
+  li { margin: 4px 0; }
+  input[type="checkbox"] { margin-right: 6px; }
+  .mermaid { margin: 16px 0; text-align: center; }
+</style>
+</head>
+<body>${body}</body>
+</html>`
 }
 
 function createWindow() {
@@ -109,6 +164,17 @@ function createMenu() {
           label: '另存为',
           accelerator: 'CmdOrCtrl+Shift+S',
           click: () => mainWindow?.webContents.send('menu-action', 'save-as'),
+        },
+        { type: 'separator' },
+        {
+          label: '导出 HTML',
+          accelerator: 'CmdOrCtrl+Shift+H',
+          click: () => mainWindow?.webContents.send('menu-action', 'export-html'),
+        },
+        {
+          label: '导出 PDF',
+          accelerator: 'CmdOrCtrl+Shift+P',
+          click: () => mainWindow?.webContents.send('menu-action', 'export-pdf'),
         },
         { type: 'separator' },
         {
@@ -253,6 +319,44 @@ ipcMain.handle('readFile', async (_event, filePath: string) => {
 
 ipcMain.handle('writeFile', async (_event, { filePath, content }: { filePath: string; content: string }) => {
   fs.writeFileSync(filePath, content, 'utf-8')
+})
+
+ipcMain.handle('exportHtmlDialog', async (_event, { markdown, darkMode }: { markdown: string; darkMode: boolean }) => {
+  const result = await dialog.showSaveDialog({
+    defaultPath: 'untitled.html',
+    filters: [{ name: 'HTML', extensions: ['html'] }],
+  })
+  if (result.canceled || !result.filePath) return null
+  const html = buildExportHtml(markdown, darkMode)
+  fs.writeFileSync(result.filePath, html, 'utf-8')
+  return result.filePath
+})
+
+ipcMain.handle('exportPdf', async (_event, { markdown, darkMode }: { markdown: string; darkMode: boolean }) => {
+  const result = await dialog.showSaveDialog({
+    defaultPath: 'untitled.pdf',
+    filters: [{ name: 'PDF', extensions: ['pdf'] }],
+  })
+  if (result.canceled || !result.filePath) return null
+
+  const html = buildExportHtml(markdown, darkMode)
+  const tempDir = app.getPath('temp')
+  const tempFile = path.join(tempDir, `markdown-export-${Date.now()}.html`)
+  fs.writeFileSync(tempFile, html, 'utf-8')
+
+  const pdfWindow = new BrowserWindow({
+    width: 800, height: 600, show: false,
+    webPreferences: { contextIsolation: true, nodeIntegration: false },
+  })
+  try {
+    await pdfWindow.loadFile(tempFile)
+    const pdf = await pdfWindow.webContents.printToPDF({ printBackground: true, preferCSSPageSize: true })
+    fs.writeFileSync(result.filePath, pdf)
+  } finally {
+    pdfWindow.destroy()
+    try { fs.unlinkSync(tempFile) } catch {}
+  }
+  return result.filePath
 })
 
 ipcMain.handle('makeDirectory', async (_event, dirPath: string) => {
